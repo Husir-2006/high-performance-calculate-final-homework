@@ -1,0 +1,27 @@
+.DS_Store
+*.o
+*.out
+*.err
+*.log
+
+# Local/editor metadata
+.claude/
+.codex/
+.agents/
+chathistory
+~$*
+
+# Build outputs
+v1_serial/v1_serial
+v2_openmp/v2_openmp
+v3_cuda/v3_cuda
+v1_serial/output.ppm
+v2_openmp/output.ppm
+
+# Redundant local archives
+1.zip
+*.zip
+
+# Internal QA artifacts
+*_QA.pdf
+

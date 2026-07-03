@@ -1,0 +1,18 @@
+#!/bin/bash
+#PBS -N ray_openmp
+#PBS -l nodes=1:ppn=32
+#PBS -l walltime=00:30:00
+#PBS -q normal
+#PBS -j oe
+
+cd "$PBS_O_WORKDIR"
+module load gcc/11.2.0
+
+export WIDTH=1200
+export HEIGHT=800
+export SAMPLES=256
+export SCENE=blackhole
+export CXX=g++
+
+bash scripts/run_benchmark.sh
+python3 scripts/plot_speedup.py

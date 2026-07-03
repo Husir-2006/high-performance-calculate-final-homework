@@ -1,0 +1,14 @@
+#!/bin/bash
+#PBS -N ray_cuda
+#PBS -l nodes=1:gpus=1
+#PBS -l walltime=00:20:00
+#PBS -q gpu
+#PBS -j oe
+
+cd "$PBS_O_WORKDIR"
+module load gcc/11.2.0
+module load cuda/12.0
+
+mkdir -p results
+nvcc -O3 -arch=sm_80 v3_cuda/main.cu -o v3_cuda/v3_cuda
+./v3_cuda/v3_cuda --width 1200 --height 800 --samples 256 --scene blackhole --output results/v3_output.ppm
