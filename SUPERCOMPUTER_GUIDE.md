@@ -86,7 +86,7 @@ module avail python
 
 ```bash
 module load gcc/11.2.0
-module load cuda/12.0
+module load intel/cuda/12.0
 module load python/3.9
 ```
 

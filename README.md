@@ -16,6 +16,12 @@ g++ -O2 -std=c++17 -fopenmp v2_openmp/main.cpp -o v2_openmp/v2_openmp
 nvcc -O3 -arch=sm_80 v3_cuda/main.cu -o v3_cuda/v3_cuda
 ```
 
+在当前超算平台上 CUDA 模块名可能是：
+
+```bash
+module load intel/cuda/12.0
+```
+
 如果本地没有 CUDA 或 OpenMP 环境，可以只编译能支持的版本；完整实验建议在超算节点上完成。
 
 ## 单独运行

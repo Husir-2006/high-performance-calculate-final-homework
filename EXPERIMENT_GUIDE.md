@@ -16,7 +16,7 @@ cd /path/to/HighperformanceExp
 
 ```bash
 module load gcc/11.2.0
-module load cuda/12.0
+module load intel/cuda/12.0
 ```
 
 确认工具可用：
@@ -161,7 +161,7 @@ CUDA 部分重点说明：
 
 `nvcc` 找不到：
 
-说明当前不是 CUDA 环境或没有加载 CUDA 模块。先执行 `module load cuda/12.0`。
+说明当前不是 CUDA 环境或没有加载 CUDA 模块。先执行 `module load intel/cuda/12.0`。
 
 CUDA 架构不匹配：
 

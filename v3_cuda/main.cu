@@ -22,10 +22,6 @@ static const int MAX_DEPTH = 50;
 static const int MAX_SPHERES = 512;
 static const int MAX_MATERIALS = 512;
 
-__constant__ Sphere d_spheres[MAX_SPHERES];
-__constant__ MaterialData d_materials[MAX_MATERIALS];
-__constant__ int d_num_spheres;
-
 #define CUDA_CHECK(call) do { \
     cudaError_t err = call; \
     if (err != cudaSuccess) { \
@@ -187,13 +183,14 @@ static void build_scene(std::vector<Sphere>& spheres, std::vector<MaterialData>&
     add_sphere(spheres, Sphere(Vec3(4, 1, 0), 1.0f, mat_metal));
 }
 
-__device__ bool hit_world(const Ray& r, float t_min, float t_max, HitRecord& rec) {
+__device__ bool hit_world(const Ray& r, float t_min, float t_max, HitRecord& rec,
+                          const Sphere* spheres, int num_spheres) {
     HitRecord temp_rec;
     bool hit_anything = false;
     float closest_so_far = t_max;
 
-    for (int i = 0; i < d_num_spheres; i++) {
-        if (d_spheres[i].hit(r, t_min, closest_so_far, temp_rec)) {
+    for (int i = 0; i < num_spheres; i++) {
+        if (spheres[i].hit(r, t_min, closest_so_far, temp_rec)) {
             hit_anything = true;
             closest_so_far = temp_rec.t;
             rec = temp_rec;
@@ -365,15 +362,17 @@ __device__ Vec3 car_cinematic_color(float u, float v, float aspect_ratio, bool s
     return color;
 }
 
-__device__ Vec3 ray_color_iterative(Ray r, curandState* state) {
+__device__ Vec3 ray_color_iterative(Ray r, curandState* state,
+                                    const Sphere* spheres, int num_spheres,
+                                    const MaterialData* materials) {
     Vec3 accumulated_attenuation(1.0f, 1.0f, 1.0f);
 
     for (int depth = 0; depth < MAX_DEPTH; depth++) {
         HitRecord rec;
-        if (hit_world(r, 0.001f, 1e30f, rec)) {
+        if (hit_world(r, 0.001f, 1e30f, rec, spheres, num_spheres)) {
             Ray scattered;
             Vec3 attenuation;
-            if (scatter_material(d_materials[rec.mat_id], r, rec, attenuation, scattered, state)) {
+            if (scatter_material(materials[rec.mat_id], r, rec, attenuation, scattered, state)) {
                 accumulated_attenuation *= attenuation;
                 r = scattered;
             } else {
@@ -397,7 +396,9 @@ __global__ void init_rand_kernel(curandState* rand_states, int width, int height
 }
 
 __global__ void render_kernel(float* framebuffer, int width, int height, int samples,
-                              Camera camera, curandState* rand_states, int scene_id) {
+                              Camera camera, curandState* rand_states, int scene_id,
+                              const Sphere* spheres, int num_spheres,
+                              const MaterialData* materials) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
     if (i >= width || j >= height) return;
@@ -417,7 +418,7 @@ __global__ void render_kernel(float* framebuffer, int width, int height, int sam
             color += car_cinematic_color(u, v, static_cast<float>(width) / height, true);
         } else {
             Ray r = camera.get_ray(u, v, &local_rand);
-            color += ray_color_iterative(r, &local_rand);
+            color += ray_color_iterative(r, &local_rand, spheres, num_spheres, materials);
         }
     }
 
@@ -460,10 +461,6 @@ int main(int argc, char** argv) {
     build_scene(spheres, materials, SCENE);
     int num_spheres = static_cast<int>(spheres.size());
 
-    CUDA_CHECK(cudaMemcpyToSymbol(d_spheres, spheres.data(), spheres.size() * sizeof(Sphere)));
-    CUDA_CHECK(cudaMemcpyToSymbol(d_materials, materials.data(), materials.size() * sizeof(MaterialData)));
-    CUDA_CHECK(cudaMemcpyToSymbol(d_num_spheres, &num_spheres, sizeof(int)));
-
     Vec3 lookfrom = (SCENE == "racing") ? Vec3(5.5f, 2.2f, 4.6f) :
                     (SCENE == "neon") ? Vec3(4.2f, 2.0f, 4.2f) : Vec3(13, 2, 3);
     Vec3 lookat = (SCENE == "classic") ? Vec3(0, 0, 0) : Vec3(0, 0.65f, -1.6f);
@@ -477,8 +474,14 @@ int main(int argc, char** argv) {
     size_t framebuffer_bytes = pixel_count * 3 * sizeof(float);
     float* d_framebuffer = nullptr;
     curandState* d_rand_states = nullptr;
+    Sphere* d_spheres = nullptr;
+    MaterialData* d_materials = nullptr;
     CUDA_CHECK(cudaMalloc(&d_framebuffer, framebuffer_bytes));
     CUDA_CHECK(cudaMalloc(&d_rand_states, pixel_count * sizeof(curandState)));
+    CUDA_CHECK(cudaMalloc(&d_spheres, spheres.size() * sizeof(Sphere)));
+    CUDA_CHECK(cudaMalloc(&d_materials, materials.size() * sizeof(MaterialData)));
+    CUDA_CHECK(cudaMemcpy(d_spheres, spheres.data(), spheres.size() * sizeof(Sphere), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_materials, materials.data(), materials.size() * sizeof(MaterialData), cudaMemcpyHostToDevice));
 
     dim3 block(16, 16);
     dim3 grid((WIDTH + block.x - 1) / block.x, (HEIGHT + block.y - 1) / block.y);
@@ -488,7 +491,8 @@ int main(int argc, char** argv) {
     init_rand_kernel<<<grid, block>>>(d_rand_states, WIDTH, HEIGHT, 20260616ULL);
     CUDA_CHECK(cudaGetLastError());
     int scene_id = (SCENE == "blackhole") ? 3 : (SCENE == "city_drive") ? 4 : (SCENE == "snow_gt") ? 5 : 0;
-    render_kernel<<<grid, block>>>(d_framebuffer, WIDTH, HEIGHT, SAMPLES, camera, d_rand_states, scene_id);
+    render_kernel<<<grid, block>>>(d_framebuffer, WIDTH, HEIGHT, SAMPLES, camera, d_rand_states,
+                                   scene_id, d_spheres, num_spheres, d_materials);
     CUDA_CHECK(cudaGetLastError());
     CUDA_CHECK(cudaDeviceSynchronize());
 
@@ -501,6 +505,8 @@ int main(int argc, char** argv) {
 
     CUDA_CHECK(cudaFree(d_framebuffer));
     CUDA_CHECK(cudaFree(d_rand_states));
+    CUDA_CHECK(cudaFree(d_spheres));
+    CUDA_CHECK(cudaFree(d_materials));
 
     std::cerr << "CUDA Render time: " << elapsed << " s\n";
     std::cout << "CUDA Render time: " << elapsed << " s" << std::endl;
