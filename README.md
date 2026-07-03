@@ -19,7 +19,7 @@ nvcc -O3 -arch=sm_80 v3_cuda/main.cu -o v3_cuda/v3_cuda
 在当前超算平台上 CUDA 模块名可能是：
 
 ```bash
-module load intel/cuda/12.0
+module load intel/cuda/12.1
 ```
 
 如果本地没有 CUDA 或 OpenMP 环境，可以只编译能支持的版本；完整实验建议在超算节点上完成。
@@ -88,4 +88,11 @@ GPU/CUDA：
 qsub scripts/submit_gpu.pbs
 ```
 
-如果学校平台使用 Slurm，把 PBS 头部改为 `#SBATCH`，核心命令保持一致即可。
+如果学校平台使用 Slurm：
+
+```bash
+chmod +x scripts/submit_gpu_slurm.sh
+sbatch scripts/submit_gpu_slurm.sh
+```
+
+登录节点直接运行 CUDA 程序可能出现驱动版本不足问题，正式测试应提交到 GPU 计算节点。

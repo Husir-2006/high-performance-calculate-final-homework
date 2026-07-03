@@ -162,7 +162,7 @@ def add_title(doc):
         ("课程方向", "高性能计算 / 图形渲染"),
         ("实现语言", "C++17、OpenMP、CUDA"),
         ("实验平台", "本地开发环境 + 远程超算平台"),
-        ("当前状态", "串行与 OpenMP 已完成超算实测，CUDA 源码已实现，待 GPU 节点补测"),
+        ("当前状态", "串行与 OpenMP 已完成超算实测；CUDA 版本已可编译，并通过 Slurm 提交 GPU 队列测试"),
     ]
     for row, (k, v) in zip(meta.rows, rows):
         row.cells[0].text = k
@@ -316,15 +316,22 @@ def build_doc():
     add_para(
         doc,
         "当前已在超算平台上完成串行版本和 OpenMP 版本的实测。测试参数为 400×300 分辨率、64 samples，串行版本运行时间为 39.1013 s，"
-        "OpenMP 8 线程版本运行时间为 9.72383 s，加速比约为 4.02×。CUDA 版本源码已实现，但由于当前登录节点未找到 nvcc，GPU 实测数据待进入 GPU 节点后补充。"
+        "OpenMP 8 线程版本运行时间为 9.72383 s，加速比约为 4.02×。CUDA 版本已经使用 intel/cuda/12.1 模块完成编译，并通过 Slurm 提交到 gpu_4090 分区运行。"
     )
 
-    doc.add_heading("1. 研究背景与实验目标", level=1)
+    doc.add_heading("1. 研究背景与意义", level=1)
     add_para(
         doc,
         "光线追踪通过模拟光线与场景物体的相交、反射、折射和散射过程生成图像，能够获得较真实的阴影、反射、透明材质和景深效果。"
         "由于每个像素通常需要发射多条光线并执行递归追踪，计算量随分辨率、采样数和递归深度快速增长，因此非常适合使用 CPU 多线程和 GPU 并行计算进行加速。"
     )
+    add_para(
+        doc,
+        "游戏画面渲染、影视级离线渲染和实时路径追踪都依赖大量相互独立的像素计算。本课程设计选择光线追踪作为优化对象，"
+        "可以较直观地体现高性能计算中任务分解、负载均衡、GPU 线程映射和性能加速比分析等核心思想。"
+    )
+
+    doc.add_heading("2. 研究内容", level=1)
     add_bullets(
         doc,
         [
@@ -335,7 +342,7 @@ def build_doc():
         ],
     )
 
-    doc.add_heading("2. 技术路线与程序结构", level=1)
+    doc.add_heading("3. 技术路线与程序结构", level=1)
     add_para(doc, "项目整体采用 V1 串行、V2 OpenMP、V3 CUDA 的递进实现路线。三种版本共享相同的渲染思想，主要差异在于像素计算的调度方式。")
     add_code(
         doc,
@@ -353,7 +360,7 @@ V3 CUDA GPU 大规模并行
         "输出图像采用 PPM 格式，便于在超算环境中直接生成和检查。"
     )
 
-    doc.add_heading("3. 串行版本实现", level=1)
+    doc.add_heading("4. 串行版本实现", level=1)
     add_para(doc, "串行版本逐行逐像素计算颜色。每个像素进行多次随机采样，用于抗锯齿和降低噪声。核心循环如下。")
     add_code(
         doc,
@@ -374,7 +381,7 @@ for (int j = HEIGHT - 1; j >= 0; j--) {
     )
     add_image(doc, assets.get("terminal_serial.png"), "图 1  超算平台串行版本编译与运行截图：400×300、64 samples，运行时间 39.1013 s。", 6.4)
 
-    doc.add_heading("4. OpenMP 并行版本实现", level=1)
+    doc.add_heading("5. OpenMP 并行版本实现", level=1)
     add_para(
         doc,
         "OpenMP 版本利用像素之间相互独立的特点，对图像行进行并行计算。为了避免多线程同时写文件，程序先将结果写入 framebuffer，最后统一按顺序输出 PPM。"
@@ -400,14 +407,16 @@ for (int j = 0; j < HEIGHT; j++) {
     )
     add_image(doc, assets.get("terminal_openmp.png"), "图 2  超算平台 OpenMP 版本运行截图：8 线程运行时间 9.72383 s，并检查了 PPM 文件头。", 6.4)
 
-    doc.add_heading("5. CUDA 版本设计", level=1)
+    doc.add_heading("6. CUDA 版本设计与超算提交", level=1)
     add_para(doc, "CUDA 版本将每个像素映射到一个 GPU 线程，使用 16×16 的线程块组织二维网格。递归 ray_color 被改写为迭代形式，以降低 GPU 栈压力。")
     add_code(
         doc,
         """
 __global__ void render_kernel(float* framebuffer, int width, int height,
                               int samples, Camera camera,
-                              curandState* rand_states, int scene_id) {
+                              curandState* rand_states, int scene_id,
+                              const Sphere* spheres, int num_spheres,
+                              const MaterialData* materials) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
     if (i >= width || j >= height) return;
@@ -419,10 +428,24 @@ __global__ void render_kernel(float* framebuffer, int width, int height,
     )
     add_para(
         doc,
-        "当前 CUDA 源码已经完成，但超算登录节点执行 nvcc 时提示 command not found。初步判断 CUDA 环境需要在 GPU 节点或通过 module 加载后使用，因此 GPU 实测数据将在平台恢复后补充。"
+        "CUDA 版本使用 cudaMalloc 在显存中保存球体和材质数组，再将指针作为 kernel 参数传入。这样可以避免带构造函数结构体放入 __constant__ 变量时产生的动态初始化问题。"
+    )
+    add_code(
+        doc,
+        """
+module load intel/cuda/12.1
+nvcc -O3 -arch=sm_80 v3_cuda/main.cu -o v3_cuda/v3_cuda
+sbatch scripts/submit_gpu_slurm.sh
+squeue -u bjtu3
+""",
+    )
+    add_para(
+        doc,
+        "实验过程中曾在登录节点直接运行 CUDA 程序并出现 CUDA driver version is insufficient for CUDA runtime version。该问题不是编译错误，而是登录节点通常不提供可用 GPU 运行环境。"
+        "随后将程序提交到 gpu_4090 分区后，该问题消失，说明 CUDA 程序应在 GPU 计算节点上运行。"
     )
 
-    doc.add_heading("6. 渲染结果与图片对比", level=1)
+    doc.add_heading("7. 渲染结果与图片对比", level=1)
     add_para(
         doc,
         "超算平台生成了两张 400×300 的 PPM 渲染结果。为了便于插入报告，已将 PPM 转换为 JPG，并与 PNG 预览共同保存在 results/report_assets 目录。"
@@ -439,7 +462,7 @@ __global__ void render_kernel(float* framebuffer, int width, int height,
         "两张图片均能正确解析为 P3 格式 PPM，尺寸为 400×300。由于随机采样和随机场景生成存在差异，两次输出的局部颜色和小球位置不完全相同，但整体场景、材质和光线追踪效果一致。"
     )
 
-    doc.add_heading("7. 扩展展示场景", level=1)
+    doc.add_heading("8. 扩展展示场景", level=1)
     add_para(
         doc,
         "为了让结果更接近图形渲染和游戏/科幻画面的展示需求，项目增加了程序化展示场景，包括黑洞吸积盘、城市追车和雪地赛道超跑。"
@@ -454,7 +477,7 @@ __global__ void render_kernel(float* framebuffer, int width, int height,
     )
     add_image(doc, assets.get("showcase_snow_gt_preview.png"), "图 5  程序化雪地赛道超跑预览。", 4.8)
 
-    doc.add_heading("8. 性能结果与分析", level=1)
+    doc.add_heading("9. 性能结果与分析", level=1)
     add_perf_table(doc)
     add_para(
         doc,
@@ -476,21 +499,38 @@ Efficiency(8 threads) = Speedup / 8 ≈ 50.3%
 """,
     )
 
-    doc.add_heading("9. 遇到的问题与后续计划", level=1)
+    doc.add_heading("10. 复现方法与提交文件说明", level=1)
+    add_para(
+        doc,
+        "提交压缩包中包含原始串行代码、OpenMP 优化代码、CUDA 优化代码、运行说明、实验报告以及答辩 PPT PDF。助教可按以下命令复现小规模正确性测试。"
+    )
+    add_code(
+        doc,
+        """
+g++ -O2 -std=c++17 v1_serial/main.cpp -o v1_serial/v1_serial
+g++ -O2 -std=c++17 -fopenmp v2_openmp/main.cpp -o v2_openmp/v2_openmp
+module load intel/cuda/12.1
+nvcc -O3 -arch=sm_80 v3_cuda/main.cu -o v3_cuda/v3_cuda
+OMP_NUM_THREADS=8 ./v2_openmp/v2_openmp --width 400 --height 300 --samples 64 --scene racing
+sbatch scripts/submit_gpu_slurm.sh
+""",
+    )
+
+    doc.add_heading("11. 遇到的问题与后续计划", level=1)
     add_bullets(
         doc,
         [
-            "CUDA 编译器暂不可用：登录节点执行 nvcc 提示 command not found，后续需要进入 GPU 队列或加载正确 CUDA module。",
+            "CUDA 登录节点运行限制：登录节点不能作为正式 GPU 运行环境，应通过 Slurm 提交到 GPU 分区。",
             "benchmark_results.csv 尚未生成：当前截图显示脚本化 benchmark 未完整跑完，后续应使用 scripts/run_benchmark.sh 统一采集数据。",
             "图像展示仍可提升：如果时间允许，可加入 OBJ 模型加载、三角形求交和 BVH 加速结构，提升车辆和城市场景的真实感。",
         ],
     )
 
-    doc.add_heading("10. 结论", level=1)
+    doc.add_heading("12. 结论", level=1)
     add_para(
         doc,
         "本实验完成了光线追踪渲染器的串行、OpenMP 和 CUDA 三版本实现。其中串行和 OpenMP 版本已在超算平台完成实测，"
-        "OpenMP 8 线程相对串行版本获得约 4.02× 加速。CUDA 版本已经完成代码设计与实现，但受当前平台 CUDA 环境限制，仍需在 GPU 节点补充实测数据。"
+        "OpenMP 8 线程相对串行版本获得约 4.02× 加速。CUDA 版本已完成编译和 GPU 队列提交流程，能够作为后续大规模渲染与性能测试的基础。"
     )
     add_para(
         doc,
