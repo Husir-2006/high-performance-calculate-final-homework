@@ -4,6 +4,8 @@
 
 光线追踪渲染器的串行、OpenMP 与 CUDA 并行优化。
 
+小组信息：第 8 组，24281098 胡哲祺，24281100 李建宇。
+
 ## 2. 目录说明
 
 - `v1_serial/`：原始串行版本，作为基准程序。
@@ -15,10 +17,11 @@
 - `EXPERIMENT_GUIDE.md`：详细实验步骤和数据记录方法。
 - `高性能计算光线追踪渲染器实验报告.docx`：实验报告。
 - `高性能计算光线追踪渲染器答辩PPT.pdf`：答辩用 PDF。
+- `submit.sh`：当前超算 Slurm GPU 分区使用的提交脚本。
 
 ## 3. 测试环境
 
-本项目在本地 macOS 环境完成代码整理与文档生成，在超算平台完成 CPU/OpenMP 版本测试，并通过 Slurm 提交 CUDA 版本到 GPU 队列。
+本项目在本地 macOS 环境完成代码整理与文档生成，在超算平台完成 CPU/OpenMP/CUDA 三版本测试，并通过 Slurm 提交 CUDA 版本到 GPU 队列。
 
 超算平台已验证可用的 CUDA 模块：
 
@@ -54,8 +57,8 @@ OMP_NUM_THREADS=8 ./v2_openmp/v2_openmp --width 400 --height 300 --samples 64 --
 CUDA 版本建议提交到 GPU 队列：
 
 ```bash
-chmod +x scripts/submit_gpu_slurm.sh
-sbatch scripts/submit_gpu_slurm.sh
+chmod +x submit.sh
+sbatch submit.sh ./v3_cuda/v3_cuda
 squeue -u $USER
 ```
 
@@ -67,5 +70,6 @@ squeue -u $USER
 |---|---:|---:|
 | V1 Serial | 单线程 | 39.1013 s |
 | V2 OpenMP | 8 线程 | 9.72383 s |
+| V3 CUDA | GPU | 0.126103 s |
 
-OpenMP 相对串行加速比约为 4.02 倍，并行效率约为 50.3%。CUDA 版本已在 GPU 队列中测试，最终运行截图和输出文件可继续补入报告。
+OpenMP 相对串行加速比约为 4.02 倍，并行效率约为 50.3%。CUDA 相对串行加速比约为 310.07 倍，输出文件为 `results/v3_output.ppm`，运行时间记录在 `job.out` 中。

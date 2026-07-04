@@ -105,15 +105,7 @@ CPU 队列：
 qsub scripts/submit_cpu.pbs
 ```
 
-GPU 队列。如果平台使用 Slurm，推荐使用本项目提供的脚本：
-
-```bash
-chmod +x scripts/submit_gpu_slurm.sh
-sbatch scripts/submit_gpu_slurm.sh
-squeue -u $USER
-```
-
-如果平台使用 PBS：
+GPU 队列：
 
 ```bash
 qsub scripts/submit_gpu.pbs
@@ -158,7 +150,7 @@ CUDA 部分重点说明：
 
 - 每个 CUDA thread 负责一个像素。
 - 递归 `ray_color` 改为迭代，避免 GPU 栈深度压力。
-- 球体和材质通过 `cudaMalloc` 分配到显存，并作为 kernel 参数传入，避免 `__constant__` 结构体动态初始化问题。
+- 球体和材质放在 constant memory，适合所有线程只读访问。
 - 反射、折射、漫反射分支会造成 warp divergence。
 
 ## 9. 常见问题
@@ -170,10 +162,6 @@ CUDA 部分重点说明：
 `nvcc` 找不到：
 
 说明当前不是 CUDA 环境或没有加载 CUDA 模块。先执行 `module load intel/cuda/12.1`。
-
-登录节点运行 CUDA 程序提示 `CUDA driver version is insufficient for CUDA runtime version`：
-
-通常说明登录节点不提供匹配 GPU 驱动或不能直接访问 GPU。程序应使用 `sbatch` 提交到 GPU 计算节点运行。
 
 CUDA 架构不匹配：
 

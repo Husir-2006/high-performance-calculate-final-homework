@@ -1,5 +1,7 @@
 # Ray Tracing HPC
 
+第 8 组：24281098 胡哲祺，24281100 李建宇。
+
 本项目实现一个小型光线追踪渲染器，并对比三种执行方式：
 
 - `v1_serial/`：C++17 串行版本
@@ -88,11 +90,17 @@ GPU/CUDA：
 qsub scripts/submit_gpu.pbs
 ```
 
-如果学校平台使用 Slurm：
+如果学校平台使用 Slurm，可使用当前平台脚本：
 
 ```bash
-chmod +x scripts/submit_gpu_slurm.sh
-sbatch scripts/submit_gpu_slurm.sh
+chmod +x submit.sh
+sbatch submit.sh ./v3_cuda/v3_cuda
 ```
 
-登录节点直接运行 CUDA 程序可能出现驱动版本不足问题，正式测试应提交到 GPU 计算节点。
+最终实测参数为 400 x 300、64 samples：
+
+| 版本 | 运行时间 | 相对串行加速比 |
+|---|---:|---:|
+| V1 Serial | 39.1013 s | 1.00 |
+| V2 OpenMP 8 线程 | 9.72383 s | 4.02 |
+| V3 CUDA GPU | 0.126103 s | 310.07 |

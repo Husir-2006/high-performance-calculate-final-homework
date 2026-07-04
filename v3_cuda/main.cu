@@ -261,7 +261,7 @@ __device__ Vec3 blackhole_color(float u, float v, float aspect_ratio) {
     float moon_rim = expf(-fabsf(moon_r - 0.052f) / 0.004f) * 0.25f;
 
     color += disk_color + ring_color + lens_color + Vec3(0.95f, 0.82f, 0.65f) * moon_rim + moon_color;
-    color *= (1.0f - 0.98f * shadow) * (1.0f - 0.80f * right_shadow);
+    color =color* (1.0f - 0.98f * shadow) * (1.0f - 0.80f * right_shadow);
     color += ring_color * 0.35f;
     color.x = clamp(color.x, 0.0f, 6.0f);
     color.y = clamp(color.y, 0.0f, 6.0f);
@@ -358,7 +358,7 @@ __device__ Vec3 car_cinematic_color(float u, float v, float aspect_ratio, bool s
     }
 
     float vignette = smoothstep_device(1.45f, 0.25f, sqrtf(x * x * 0.35f + y * y));
-    color *= 0.62f + 0.38f * vignette;
+    color = color * (0.62f + 0.38f * vignette);
     return color;
 }
 

@@ -210,15 +210,13 @@ qsub scripts/submit_gpu.pbs
 qstat
 ```
 
-如果平台使用 Slurm，可以直接使用：
+如果平台使用 Slurm，把 PBS 脚本改成类似：
 
 ```bash
-chmod +x scripts/submit_gpu_slurm.sh
-sbatch scripts/submit_gpu_slurm.sh
-squeue -u $USER
+sbatch job.slurm
 ```
 
-登录节点直接运行 CUDA 程序可能出现 `CUDA driver version is insufficient for CUDA runtime version`，应提交到 GPU 计算节点执行。
+核心命令仍然是编译、运行 `scripts/run_benchmark.sh`。
 
 ## 9. 让效果更突出的做法
 

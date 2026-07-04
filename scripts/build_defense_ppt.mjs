@@ -139,12 +139,12 @@ async function main() {
 
   let s = deck.slides.add();
   await imageHero(s, "results/presentation_assets/ref_city_car.png", "城市赛车参考图");
-  text(s, "高性能计算课程设计", 72, 56, 520, 34, { fontSize: 20, bold: true, color: "#bfdbfe" });
+  text(s, "高性能计算课程设计 · 第 8 组", 72, 56, 620, 34, { fontSize: 20, bold: true, color: "#bfdbfe" });
   text(s, "光线追踪渲染器的\n并行优化", 72, 138, 640, 150, { fontSize: 52, bold: true, color: C.white });
-  text(s, "串行基准 / OpenMP 多线程 / CUDA GPU", 72, 310, 620, 42, { fontSize: 25, color: "#dbeafe" });
+  text(s, "24281098 胡哲祺 / 24281100 李建宇", 72, 310, 680, 42, { fontSize: 25, color: "#dbeafe" });
   metric(s, "OpenMP 加速比", "4.02x", "400 x 300, 64 samples, 8 threads", 72, 502, C.orange);
   metric(s, "优化对象", "像素级光追", "每个像素可独立追踪光线", 426, 502, C.blue);
-  metric(s, "CUDA 状态", "已编译提交", "Slurm 提交 GPU 队列", 780, 502, C.cyan);
+  metric(s, "CUDA 加速比", "310.07x", "GPU render time 0.126103 s", 780, 502, C.cyan);
 
   s = deck.slides.add();
   s.background.fill = "white";
@@ -323,18 +323,19 @@ async function main() {
 
   s = deck.slides.add();
   s.background.fill = "white";
-  title(s, "已有超算结果显示 OpenMP 获得明显加速", "运行结果");
+  title(s, "已有超算结果显示 GPU 并行获得数量级加速", "运行结果");
   s.charts.add("bar", {
-    position: { left: 110, top: 202, width: 530, height: 330 },
-    categories: ["Serial", "OpenMP 8"],
-    series: [{ name: "运行时间 / s", values: [39.1013, 9.72383], fill: C.orange }],
+    position: { left: 82, top: 202, width: 570, height: 330 },
+    categories: ["Serial", "OpenMP 8", "CUDA"],
+    series: [{ name: "运行时间 / s", values: [39.1013, 9.72383, 0.126103], fill: C.orange }],
     hasLegend: false,
     dataLabels: { showValue: true, position: "outEnd" },
     yAxis: { majorGridlines: { style: "solid", fill: "#e2e8f0", width: 1 } },
   });
-  metric(s, "串行版本", "39.1013 s", "400 x 300, 64 samples", 732, 206, C.ink);
-  metric(s, "OpenMP 版本", "9.72383 s", "8 CPU threads", 732, 374, C.orange);
-  text(s, "加速比 = 39.1013 / 9.72383 ≈ 4.02x，并行效率约 50.3%。", 138, 592, 1000, 42, {
+  metric(s, "串行版本", "39.1013 s", "400 x 300, 64 samples", 718, 180, C.ink, 230);
+  metric(s, "OpenMP 版本", "9.72383 s", "8 CPU threads", 972, 180, C.orange, 230);
+  metric(s, "CUDA 版本", "0.126103 s", "gpu_4090 分区", 846, 356, C.cyan, 230);
+  text(s, "OpenMP 加速约 4.02x；CUDA 相对串行加速约 310.07x。", 138, 592, 1000, 42, {
     fontSize: 26,
     bold: true,
     color: C.ink,
@@ -343,7 +344,7 @@ async function main() {
 
   s = deck.slides.add();
   s.background.fill = C.pale;
-  title(s, "性能提升来自像素级并行，但并非理想线性加速", "性能分析");
+  title(s, "性能提升来自像素级并行，CUDA 进一步放大并发规模", "性能分析");
   bulletList(s, [
     "像素计算独立，因此并行化收益明显",
     "文件输出、场景初始化和部分统计仍是串行部分",
@@ -351,9 +352,10 @@ async function main() {
     "随机数生成、调度和缓存访问会引入额外开销",
     "线程数继续增大后，内存带宽和调度开销会限制收益",
   ], 92, 188, 610, { fontSize: 22, lineHeight: 44, dotColor: C.orange });
-  metric(s, "加速比", "4.02x", "T_serial / T_openmp", 770, 198, C.orange, 330);
-  metric(s, "并行效率", "50.3%", "Speedup / 8 threads", 770, 368, C.blue, 330);
-  text(s, "结论：OpenMP 优化已经验证方向有效，CUDA 版本用于进一步挖掘 GPU 大规模并行能力。", 190, 590, 900, 38, {
+  metric(s, "OpenMP 加速比", "4.02x", "T_serial / T_openmp", 770, 168, C.orange, 330);
+  metric(s, "CUDA 加速比", "310.07x", "T_serial / T_cuda", 770, 318, C.cyan, 330);
+  metric(s, "OpenMP 效率", "50.3%", "Speedup / 8 threads", 770, 468, C.blue, 330);
+  text(s, "结论：OpenMP 验证 CPU 多核收益，CUDA 体现 GPU 大规模线程并行优势。", 116, 620, 1040, 38, {
     fontSize: 24,
     bold: true,
     alignment: "center",
@@ -441,12 +443,12 @@ async function main() {
   title(s, "课程设计已经形成可复现的提交包", "总结");
   bulletList(s, [
     "完成串行、OpenMP、CUDA 三个版本的源码与运行说明",
-    "完成超算 CPU/OpenMP 实测，OpenMP 8 线程加速约 4.02 倍",
-    "CUDA 已解决编译问题，并按平台要求通过 Slurm 提交 GPU 队列",
+    "完成超算 CPU/OpenMP/CUDA 实测，CUDA 相对串行加速约 310.07 倍",
+    "CUDA 已完成 GPU 队列实测，运行时间为 0.126103 s",
     "报告中插入运行截图、结果图片、代码片段和性能分析",
     "答辩 PDF 扩展为完整展示版，突出高性能计算和游戏渲染方向",
   ], 116, 190, 820, { fontSize: 24, lineHeight: 48, dotColor: C.orange });
-  metric(s, "最终材料", "代码 / 报告 / PPT", "满足课程设计提交要求", 842, 498, C.blue, 300);
+  metric(s, "最终材料", "代码 / 报告 / PPT", "第 8 组统一版本", 842, 498, C.blue, 300);
   text(s, "谢谢老师和同学！", 116, 610, 600, 42, { fontSize: 32, bold: true, color: C.ink });
 
   for (const [index, slide] of deck.slides.items.entries()) {

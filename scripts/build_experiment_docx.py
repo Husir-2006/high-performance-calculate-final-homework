@@ -50,12 +50,17 @@ def ensure_assets():
     for src, name in [
         (RESULTS / "hpc_output_1.ppm", "hpc_output_1.jpg"),
         (RESULTS / "hpc_output_3.ppm", "hpc_output_3.jpg"),
+        (RESULTS / "v3_output.ppm", "v3_output.jpg"),
     ]:
         if src.exists():
             dst = ASSETS / name
             im = Image.open(src).convert("RGB")
             im.save(dst, "JPEG", quality=95)
             copies[name] = dst
+            png_name = name.replace(".jpg", ".png")
+            png_dst = ASSETS / png_name
+            im.save(png_dst, "PNG")
+            copies[png_name] = png_dst
 
     return copies
 
@@ -155,14 +160,16 @@ def add_title(doc):
     run.font.color.rgb = RGBColor(80, 80, 80)
     set_east_asia_font(run, "宋体")
 
-    meta = doc.add_table(rows=4, cols=2)
+    meta = doc.add_table(rows=6, cols=2)
     meta.alignment = WD_TABLE_ALIGNMENT.CENTER
     set_table_width(meta)
     rows = [
         ("课程方向", "高性能计算 / 图形渲染"),
+        ("小组信息", "第 8 组：24281098 胡哲祺，24281100 李建宇"),
         ("实现语言", "C++17、OpenMP、CUDA"),
         ("实验平台", "本地开发环境 + 远程超算平台"),
-        ("当前状态", "串行与 OpenMP 已完成超算实测；CUDA 版本已可编译，并通过 Slurm 提交 GPU 队列测试"),
+        ("测试环境", "超算 GPU 分区 gpu_4090，CUDA 模块 intel/cuda/12.1"),
+        ("当前状态", "串行、OpenMP 与 CUDA 三版本均已完成超算测试并生成 PPM 输出"),
     ]
     for row, (k, v) in zip(meta.rows, rows):
         row.cells[0].text = k
@@ -253,7 +260,9 @@ def add_two_images(doc, left_path, right_path, left_caption, right_caption):
 def add_perf_table(doc):
     serial = 39.1013
     openmp = 9.72383
+    cuda = 0.126103
     speedup = serial / openmp
+    cuda_speedup = serial / cuda
     efficiency = speedup / 8.0
     table = doc.add_table(rows=1, cols=4)
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
@@ -266,7 +275,7 @@ def add_perf_table(doc):
     data = [
         ["V1 Serial", "1", f"{serial:.4f}", "1.00"],
         ["V2 OpenMP", "8", f"{openmp:.5f}", f"{speedup:.2f}"],
-        ["V3 CUDA", "GPU", "待补充", "待补充"],
+        ["V3 CUDA", "GPU", f"{cuda:.6f}", f"{cuda_speedup:.2f}"],
     ]
     for row_data in data:
         row = table.add_row()
@@ -279,7 +288,7 @@ def add_perf_table(doc):
             for p in cell.paragraphs:
                 p.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 p.paragraph_format.space_after = Pt(2)
-    add_caption(doc, f"表 1  400×300、64 samples 下的已有超算实测结果；OpenMP 8 线程效率约 {efficiency * 100:.1f}%。")
+    add_caption(doc, f"表 1  400×300、64 samples 下的超算实测结果；OpenMP 8 线程效率约 {efficiency * 100:.1f}%，CUDA 相对串行加速约 {cuda_speedup:.2f}×。")
 
 
 def add_header_footer(doc):
@@ -293,7 +302,7 @@ def add_header_footer(doc):
         r.font.color.rgb = RGBColor(100, 100, 100)
     footer = section.footer
     p = footer.paragraphs[0]
-    p.text = "实验报告 · 串行 / OpenMP / CUDA"
+    p.text = "第 8 组 · 24281098 胡哲祺 / 24281100 李建宇"
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     for r in p.runs:
         r.font.size = Pt(9)
@@ -315,8 +324,8 @@ def build_doc():
     )
     add_para(
         doc,
-        "当前已在超算平台上完成串行版本和 OpenMP 版本的实测。测试参数为 400×300 分辨率、64 samples，串行版本运行时间为 39.1013 s，"
-        "OpenMP 8 线程版本运行时间为 9.72383 s，加速比约为 4.02×。CUDA 版本已经使用 intel/cuda/12.1 模块完成编译，并通过 Slurm 提交到 gpu_4090 分区运行。"
+        "当前已在超算平台上完成串行、OpenMP 与 CUDA 三个版本的实测。测试参数为 400×300 分辨率、64 samples，串行版本运行时间为 39.1013 s，"
+        "OpenMP 8 线程版本运行时间为 9.72383 s，加速比约为 4.02×；CUDA 版本通过 intel/cuda/12.1 编译并提交至 gpu_4090 分区运行，运行时间为 0.126103 s，相对串行加速约 310.07×。"
     )
 
     doc.add_heading("1. 研究背景与意义", level=1)
@@ -435,20 +444,20 @@ __global__ void render_kernel(float* framebuffer, int width, int height,
         """
 module load intel/cuda/12.1
 nvcc -O3 -arch=sm_80 v3_cuda/main.cu -o v3_cuda/v3_cuda
-sbatch scripts/submit_gpu_slurm.sh
+sbatch submit.sh ./v3_cuda/v3_cuda
 squeue -u bjtu3
 """,
     )
     add_para(
         doc,
         "实验过程中曾在登录节点直接运行 CUDA 程序并出现 CUDA driver version is insufficient for CUDA runtime version。该问题不是编译错误，而是登录节点通常不提供可用 GPU 运行环境。"
-        "随后将程序提交到 gpu_4090 分区后，该问题消失，说明 CUDA 程序应在 GPU 计算节点上运行。"
+        "随后将程序提交到 gpu_4090 分区后，该问题消失，并成功生成 results/v3_output.ppm。作业输出 job.out 中记录 CUDA Render time 为 0.126103 s，说明 GPU 版本已完成实测。"
     )
 
     doc.add_heading("7. 渲染结果与图片对比", level=1)
     add_para(
         doc,
-        "超算平台生成了两张 400×300 的 PPM 渲染结果。为了便于插入报告，已将 PPM 转换为 JPG，并与 PNG 预览共同保存在 results/report_assets 目录。"
+        "超算平台生成了串行、OpenMP 和 CUDA 版本的 400×300 PPM 渲染结果。为了便于插入报告，已将关键 PPM 转换为 JPG/PNG，并与运行截图共同保存在 results/report_assets 目录。"
     )
     add_two_images(
         doc,
@@ -461,6 +470,7 @@ squeue -u bjtu3
         doc,
         "两张图片均能正确解析为 P3 格式 PPM，尺寸为 400×300。由于随机采样和随机场景生成存在差异，两次输出的局部颜色和小球位置不完全相同，但整体场景、材质和光线追踪效果一致。"
     )
+    add_image(doc, assets.get("v3_output.jpg"), "图 4  CUDA 版本超算输出 v3_output.ppm 转 JPG，尺寸为 400×300。", 5.8)
 
     doc.add_heading("8. 扩展展示场景", level=1)
     add_para(
@@ -472,37 +482,39 @@ squeue -u bjtu3
         doc,
         assets.get("showcase_blackhole_preview.png"),
         assets.get("showcase_city_drive_preview.png"),
-        "图 4(a)  程序化黑洞吸积盘预览",
-        "图 4(b)  程序化城市追车预览",
+        "图 5(a)  程序化黑洞吸积盘预览",
+        "图 5(b)  程序化城市追车预览",
     )
-    add_image(doc, assets.get("showcase_snow_gt_preview.png"), "图 5  程序化雪地赛道超跑预览。", 4.8)
+    add_image(doc, assets.get("showcase_snow_gt_preview.png"), "图 6  程序化雪地赛道超跑预览。", 4.8)
 
     doc.add_heading("9. 性能结果与分析", level=1)
     add_perf_table(doc)
     add_para(
         doc,
         "由表 1 可见，OpenMP 8 线程版本将运行时间从 39.1013 s 降低到 9.72383 s，加速比约为 4.02×。"
-        "虽然低于理想线性加速 8×，但已经说明像素级并行对光线追踪任务具有明显效果。"
+        "CUDA 版本进一步将运行时间降低到 0.126103 s，相对串行版本加速约 310.07×，说明像素级光线追踪任务非常适合 GPU 大规模并行。"
     )
     add_para(
         doc,
-        "加速比未达到理想值的原因主要包括：场景初始化和文件输出仍存在串行部分；不同像素追踪深度不同导致负载不均；动态调度和随机数生成带来额外开销；多线程访问共享场景数据时会受到缓存和内存带宽影响。"
+        "OpenMP 加速比未达到理想值的原因主要包括：场景初始化和文件输出仍存在串行部分；不同像素追踪深度不同导致负载不均；动态调度和随机数生成带来额外开销。"
+        "CUDA 版本速度提升更明显，是因为每个像素可映射到独立 GPU 线程，显卡可以同时调度大量线程隐藏访存延迟。但 CUDA 仍会受到分支发散、随机数状态访问和显存传输等因素影响。"
     )
     add_code(
         doc,
         """
 Speedup = T_serial / T_parallel
-        = 39.1013 / 9.72383
-        ≈ 4.02
+OpenMP Speedup = 39.1013 / 9.72383 ≈ 4.02
 
 Efficiency(8 threads) = Speedup / 8 ≈ 50.3%
+
+CUDA Speedup = 39.1013 / 0.126103 ≈ 310.07
 """,
     )
 
     doc.add_heading("10. 复现方法与提交文件说明", level=1)
     add_para(
         doc,
-        "提交压缩包中包含原始串行代码、OpenMP 优化代码、CUDA 优化代码、运行说明、实验报告以及答辩 PPT PDF。助教可按以下命令复现小规模正确性测试。"
+        "提交压缩包命名为“大作业-8号.zip”，包含原始串行代码、OpenMP 优化代码、CUDA 优化代码、运行说明、实验报告以及答辩 PPT PDF。助教可按以下命令复现小规模正确性测试。"
     )
     add_code(
         doc,
@@ -512,7 +524,7 @@ g++ -O2 -std=c++17 -fopenmp v2_openmp/main.cpp -o v2_openmp/v2_openmp
 module load intel/cuda/12.1
 nvcc -O3 -arch=sm_80 v3_cuda/main.cu -o v3_cuda/v3_cuda
 OMP_NUM_THREADS=8 ./v2_openmp/v2_openmp --width 400 --height 300 --samples 64 --scene racing
-sbatch scripts/submit_gpu_slurm.sh
+sbatch submit.sh ./v3_cuda/v3_cuda
 """,
     )
 
@@ -521,7 +533,7 @@ sbatch scripts/submit_gpu_slurm.sh
         doc,
         [
             "CUDA 登录节点运行限制：登录节点不能作为正式 GPU 运行环境，应通过 Slurm 提交到 GPU 分区。",
-            "benchmark_results.csv 尚未生成：当前截图显示脚本化 benchmark 未完整跑完，后续应使用 scripts/run_benchmark.sh 统一采集数据。",
+            "不同平台作业脚本差异：PBS 与 Slurm 的队列参数不同，本项目同时保留了 scripts/submit_gpu_slurm.sh 与当前平台使用的 submit.sh。",
             "图像展示仍可提升：如果时间允许，可加入 OBJ 模型加载、三角形求交和 BVH 加速结构，提升车辆和城市场景的真实感。",
         ],
     )
@@ -529,8 +541,8 @@ sbatch scripts/submit_gpu_slurm.sh
     doc.add_heading("12. 结论", level=1)
     add_para(
         doc,
-        "本实验完成了光线追踪渲染器的串行、OpenMP 和 CUDA 三版本实现。其中串行和 OpenMP 版本已在超算平台完成实测，"
-        "OpenMP 8 线程相对串行版本获得约 4.02× 加速。CUDA 版本已完成编译和 GPU 队列提交流程，能够作为后续大规模渲染与性能测试的基础。"
+        "本实验完成了光线追踪渲染器的串行、OpenMP 和 CUDA 三版本实现，并在超算平台完成三版本实测。"
+        "OpenMP 8 线程相对串行版本获得约 4.02× 加速，CUDA GPU 版本相对串行版本获得约 310.07× 加速。"
     )
     add_para(
         doc,
